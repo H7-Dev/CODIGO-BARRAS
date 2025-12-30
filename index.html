@@ -4,6 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gerador de Etiquetas - Almoxarifado</title>
+    <!-- Adicionando biblioteca JsBarcode para geração local -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    
+    <!-- Estilo Dinâmico para Impressão (Será atualizado via JS) -->
+    <style id="dynamic-print-style">
+        @media print {
+            @page {
+                size: A4;
+                margin: 10mm;
+            }
+        }
+    </style>
+
     <style>
         /* --- RESET E BASE --- */
         * {
@@ -14,7 +27,7 @@
         }
 
         body {
-            background-color: #f1f5f9; /* Slate-100 */
+            background-color: #e2e8f0; /* Fundo mais escuro para destacar a folha */
             display: flex;
             height: 100vh;
             overflow: hidden;
@@ -22,19 +35,19 @@
 
         /* --- PAINEL LATERAL (CONTROLES) --- */
         .sidebar {
-            width: 380px;
+            width: 360px;
             background: white;
-            border-right: 1px solid #e2e8f0;
+            border-right: 1px solid #cbd5e1;
             display: flex;
             flex-direction: column;
             padding: 20px;
             overflow-y: auto;
             box-shadow: 4px 0 15px rgba(0,0,0,0.05);
-            z-index: 10;
+            z-index: 20;
         }
 
         h2 {
-            color: #1f2937;
+            color: #1e293b;
             font-size: 1.25rem;
             margin-bottom: 20px;
             border-bottom: 1px solid #f1f5f9;
@@ -84,22 +97,8 @@
             border: 1px solid #e2e8f0;
         }
 
-        .form-group label {
-            display: block;
-            font-size: 10px;
-            text-transform: uppercase;
-            font-weight: bold;
-            color: #64748b;
-            margin-bottom: 5px;
-            letter-spacing: 0.5px;
-        }
-
         .input-wrapper {
             margin-bottom: 10px;
-        }
-
-        .input-wrapper:last-child {
-            margin-bottom: 0;
         }
 
         .input-label {
@@ -107,9 +106,10 @@
             font-size: 11px;
             color: #64748b;
             margin-bottom: 2px;
+            font-weight: bold;
         }
 
-        input[type="text"], textarea {
+        input[type="text"], input[type="number"], textarea, select {
             width: 100%;
             padding: 8px;
             border: 1px solid #cbd5e1;
@@ -117,9 +117,10 @@
             font-size: 14px;
             outline: none;
             transition: border-color 0.2s;
+            background: white;
         }
 
-        input[type="text"]:focus, textarea:focus {
+        input[type="text"]:focus, input[type="number"]:focus, textarea:focus, select:focus {
             border-color: #dc2626;
             background: #fef2f2;
         }
@@ -130,6 +131,34 @@
             resize: none;
             white-space: pre;
         }
+
+        .action-btn {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn-add {
+            background-color: #2563eb;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        .btn-add:hover { background-color: #1d4ed8; }
+
+        .btn-clear {
+            background-color: white;
+            border: 1px solid #ef4444;
+            color: #ef4444;
+        }
+        .btn-clear:hover { background-color: #fef2f2; }
 
         .print-btn {
             margin-top: auto;
@@ -145,58 +174,100 @@
             box-shadow: 0 4px 6px rgba(220, 38, 38, 0.2);
             transition: transform 0.1s;
         }
-
-        .print-btn:active {
-            transform: scale(0.98);
-        }
-
-        .print-btn:disabled {
-            background: #cbd5e1;
-            cursor: not-allowed;
-            box-shadow: none;
+        .print-btn:hover {
+            filter: brightness(1.1);
         }
 
         /* --- ÁREA DE VISUALIZAÇÃO (PREVIEW) --- */
         .preview-area {
             flex: 1;
-            padding: 40px;
+            padding: 20px 40px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 40px;
+            position: relative;
         }
 
-        .preview-header {
-            font-size: 12px;
+        /* --- SIMULAÇÃO DA FOLHA DE PAPEL --- */
+        .paper-sheet {
+            background: white;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            margin: 20px auto;
+            /* Padding visual que simula a margem de impressão */
+            padding: 10mm; 
+            /* Dimensões A4 padrão */
+            width: 210mm; 
+            min-height: 297mm;
+            
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* Centraliza as etiquetas na folha */
+            gap: 2mm; /* Espaçamento entre etiquetas */
+            box-sizing: border-box;
+            
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        /* Rótulo da folha */
+        .paper-label {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            background: #94a3b8;
+            color: white;
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 4px;
             font-weight: bold;
-            color: #94a3b8;
             text-transform: uppercase;
-            letter-spacing: 2px;
         }
 
-        /* --- O DESIGN DA ETIQUETA (CSS PURO) --- */
+        /* --- PREVIEW FLUTUANTE DO RASCUNHO --- */
+        .draft-preview-container {
+            width: 100%;
+            max-width: 210mm;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            opacity: 1;
+            transition: opacity 0.3s;
+        }
+        
+        .draft-preview-container.faded {
+            opacity: 0.5; /* Fica transparente quando não está na folha */
+        }
+
+        .draft-label-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #64748b;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* --- O DESIGN DA ETIQUETA --- */
         .label-container {
-            width: 100mm;
-            height: 70mm;
             background: white;
             position: relative;
-            /* Sombras para visualização na tela */
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            margin-bottom: 20px;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.1); /* Borda sutil para ver limites brancos */
             flex-shrink: 0;
-            page-break-after: always; /* Importante para impressão */
+            page-break-inside: avoid;
         }
 
-        /* Borda tracejada (linha de corte visual) */
         .cut-line {
             position: absolute;
             inset: 0;
             border: 1px dashed #cbd5e1;
             pointer-events: none;
+            z-index: 5;
         }
 
-        /* Grid interno (Borda preta grossa) */
         .label-grid {
             position: absolute;
             top: 4px; left: 4px; right: 4px; bottom: 4px;
@@ -207,163 +278,74 @@
             z-index: 1;
         }
 
-        /* LINHA 1: CABEÇALHO */
-        .label-header {
-            height: 18%; /* Proporção exata */
-            display: flex;
-            border-bottom: 1px solid black;
-        }
+        /* Estilos Internos da Etiqueta */
+        .label-header { height: 18%; display: flex; border-bottom: 1px solid black; }
+        .header-left { width: 40%; background-color: #DC2626; color: white; border-right: 1px solid black; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-transform: uppercase; text-align: center; line-height: 1.1; padding: 0 2px;}
+        .header-right { width: 60%; background-color: #DC2626; color: white; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        /* Modo Preto e Branco */
+        .label-grid.bw .header-left, .label-grid.bw .header-right { background-color: black !important; color: white !important; }
 
-        .header-left {
-            width: 40%;
-            background-color: #FF0000;
-            color: white;
-            border-right: 1px solid black;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: bold;
-            text-transform: uppercase;
-            text-align: center;
-            padding: 0 4px;
-            line-height: 1.1;
-        }
+        .label-body { flex: 1; display: flex; border-bottom: 1px solid black; }
+        .body-left { width: 40%; border-right: 1px solid black; display: flex; align-items: center; justify-content: center; padding: 5px; }
+        .body-left img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .body-right { width: 60%; display: flex; align-items: center; justify-content: center; padding: 2px; overflow: hidden; }
+        .barcode-svg { width: 100%; height: 100%; display: block; }
 
-        .header-right {
-            width: 60%;
-            background-color: #FF0000;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
+        .label-footer { height: 25%; display: flex; }
+        .footer-left { width: 40%; border-right: 1px solid black; display: flex; align-items: center; justify-content: center; }
+        .footer-left span { font-size: 12px; font-weight: bold; text-transform: uppercase; color: black; text-align: center;}
+        .footer-right { width: 60%; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+        .footer-right span { font-size: 24px; font-weight: bold; color: black; line-height: 1; }
 
-        /* LINHA 2: CORPO */
-        .label-body {
-            flex: 1; /* Ocupa o espaço restante */
-            display: flex;
-            border-bottom: 1px solid black;
-        }
-
-        .body-left {
-            width: 40%;
-            border-right: 1px solid black;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 8px;
-        }
-
-        .body-left img {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-        }
-
-        .body-right {
-            width: 60%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 8px;
-            overflow: hidden;
-        }
-
-        .barcode-img {
-            width: 100%;
-            height: 100%;
-            object-fit: fill; /* Estica para preencher */
-            max-height: 100%;
-            min-height: 60%;
-        }
-
-        /* LINHA 3: RODAPÉ */
-        .label-footer {
-            height: 25%; /* Proporção exata */
-            display: flex;
-        }
-
-        .footer-left {
-            width: 40%;
-            border-right: 1px solid black;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .footer-left span {
-            font-size: 14px;
-            font-weight: bold;
-            text-transform: uppercase;
-            color: black;
-        }
-
-        .footer-right {
-            width: 60%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0 4px;
-        }
-
-        .footer-right span {
-            font-size: 30px; /* ~3xl */
-            font-weight: bold;
-            color: black;
-            line-height: 1;
-            letter-spacing: -1px;
-        }
-
-        /* Contador para tela */
         .counter {
             position: absolute;
-            left: -40px;
-            top: 0;
-            width: 24px;
-            height: 24px;
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            left: -30px;
+            top: 50%;
+            transform: translateY(-50%);
             font-size: 10px;
             color: #94a3b8;
+            font-weight: bold;
         }
 
         /* --- CONFIGURAÇÕES DE IMPRESSÃO --- */
         @media print {
-            body {
-                background: white;
-                height: auto;
-                display: block;
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
-            .sidebar { display: none; }
-            .preview-area { 
-                padding: 0; 
+            body { 
+                background: white; 
                 display: block; 
+                height: auto; 
                 overflow: visible;
             }
-            .preview-header { display: none; }
+            .sidebar, .draft-preview-container, .paper-label { display: none !important; }
+            .preview-area { 
+                padding: 0; 
+                display: block;
+                overflow: visible;
+            }
+            .paper-sheet {
+                box-shadow: none;
+                margin: 0;
+                width: auto;
+                min-height: auto;
+                padding: 0; /* A margem é controlada pelo @page */
+                background: none;
+            }
             
             .label-container {
                 box-shadow: none;
-                margin: 0;
-                page-break-after: always;
-                break-after: page;
+                /* Espaçamento para corte manual */
+                margin-bottom: 5px; 
             }
             
-            .cut-line { display: none; } /* Remove linha cinza na impressão */
+            body.print-cuts .cut-line { display: block !important; border-color: black; }
+            body:not(.print-cuts) .cut-line { display: none !important; }
             .counter { display: none; }
         }
-
-        /* Utilitários */
+        
         .hidden { display: none; }
     </style>
 </head>
@@ -371,92 +353,145 @@
 
     <!-- PAINEL DE CONTROLE -->
     <div class="sidebar">
-        <h2>🏷️ Gerador de Etiquetas</h2>
+        <h2>🏷️ Gerador Pro</h2>
 
         <div class="tabs">
-            <button class="tab-btn active" id="btnSingle" onclick="setMode('single')">Manual</button>
+            <button class="tab-btn active" id="btnSingle" onclick="setMode('single')">Editor Manual</button>
             <button class="tab-btn" id="btnBulk" onclick="setMode('bulk')">Importar Excel</button>
+        </div>
+        
+        <!-- Configurações Gerais -->
+        <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <div style="font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 10px;">Configuração da Página</div>
+            
+            <div class="input-wrapper">
+                <span class="input-label">Layout da Página</span>
+                <select id="paperType" onchange="render()" style="font-weight:bold; color:#1e293b;">
+                    <option value="a4">Folha A4 (Lista Vertical)</option>
+                    <option value="thermal">Rolo Térmico (1 por pág)</option>
+                </select>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <div style="flex:1">
+                    <span class="input-label">Largura (mm)</span>
+                    <input type="number" id="labelWidth" value="100" oninput="render()">
+                </div>
+                <div style="flex:1">
+                    <span class="input-label">Altura (mm)</span>
+                    <input type="number" id="labelHeight" value="70" oninput="render()">
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: #333;">
+                    <input type="checkbox" id="bwMode" onchange="render()">
+                    <span>Preto e Branco</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: #333;">
+                    <input type="checkbox" id="printCuts" checked onchange="render()">
+                    <span>Linha de Corte (Tracejada)</span>
+                </label>
+            </div>
         </div>
 
         <!-- MODO MANUAL -->
         <div id="singleMode">
-            <div class="form-group">
-                <label>Cabeçalho (Vermelho)</label>
-                <div class="input-wrapper">
-                    <span class="input-label">Esquerda (Local)</span>
-                    <input type="text" id="warehouse" value="ALMOXARIFADO FÁBRICA" oninput="render()">
+            <div style="background: white; border: 2px solid #3b82f6; padding: 15px; border-radius: 8px; margin-bottom: 15px; position: relative;">
+                <div style="position: absolute; top: -10px; left: 10px; background: #3b82f6; color: white; font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: bold;">NOVA ETIQUETA</div>
+                
+                <div style="margin-top: 10px;">
+                    <div class="input-wrapper">
+                        <span class="input-label">Local (Cabeçalho Esq.)</span>
+                        <input type="text" id="warehouse" value="ALMOXARIFADO" oninput="render()">
+                    </div>
+                    <div class="input-wrapper">
+                        <span class="input-label">Título (Cabeçalho Dir.)</span>
+                        <input type="text" id="headerRight" value="CÓDIGO" oninput="render()">
+                    </div>
+                     <div class="input-wrapper">
+                        <span class="input-label" style="color:#2563eb">VALOR DO CÓDIGO (Barras)</span>
+                        <input type="text" id="code" value="001.2024" style="font-weight: bold; font-family: monospace; border-color: #3b82f6;" oninput="render()">
+                    </div>
+                    <div class="input-wrapper">
+                        <span class="input-label">Rótulo Rodapé</span>
+                        <input type="text" id="addressLabel" value="ENDEREÇO" oninput="render()">
+                    </div>
+                     <div class="input-wrapper">
+                        <span class="input-label">Logo URL (Opcional)</span>
+                        <input type="text" id="logoUrl" placeholder="http://..." oninput="render()">
+                    </div>
                 </div>
-                <div class="input-wrapper">
-                    <span class="input-label">Direita (Título)</span>
-                    <input type="text" id="headerRight" value="CÓDIGO" oninput="render()">
-                </div>
+
+                <button class="action-btn btn-add" onclick="addToQueue()">
+                    <span>⬇ Adicionar à Folha</span>
+                </button>
             </div>
 
-            <div class="form-group">
-                <label>Conteúdo Principal</label>
-                <div class="input-wrapper">
-                    <span class="input-label">Logo URL (Opcional)</span>
-                    <input type="text" id="logoUrl" placeholder="https://..." oninput="render()">
-                </div>
-                <div class="input-wrapper">
-                    <span class="input-label"><strong>VALOR DO CÓDIGO</strong></span>
-                    <input type="text" id="code" value="02.03.03" style="font-weight: bold; font-family: monospace;" oninput="render()">
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>Rodapé</label>
-                <div class="input-wrapper">
-                    <span class="input-label">Rótulo Inferior</span>
-                    <input type="text" id="addressLabel" value="ENDEREÇO" oninput="render()">
-                </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 5px;">
+                <span style="font-size: 12px; font-weight: bold; color: #475569;">Na Folha: <span id="queueCount" style="color: #2563eb;">0</span> itens</span>
+                <button class="btn-clear" style="padding: 4px 10px; font-size: 10px; width: auto; border-radius: 20px;" onclick="clearQueue()">Limpar Folha</button>
             </div>
         </div>
 
         <!-- MODO EXCEL -->
         <div id="bulkMode" class="hidden">
-            <div class="form-group" style="background: #eff6ff; border-color: #bfdbfe;">
-                <label style="color: #1e40af;">Instruções</label>
-                <p style="font-size: 11px; color: #1e3a8a; margin-bottom: 5px;">
-                    Copie as colunas do Excel e cole abaixo. Ordem:
+            <div class="form-group" style="background: #ecfdf5; border-color: #6ee7b7;">
+                <label style="color: #047857;">Importar Dados</label>
+                <p style="font-size: 11px; color: #065f46; margin-bottom: 5px;">
+                    Copie do Excel e cole abaixo (sem cabeçalho).
                 </p>
-                <div style="background: white; padding: 4px; border: 1px solid #bfdbfe; border-radius: 4px; font-size: 10px; font-family: monospace; overflow-x: auto; white-space: nowrap;">
-                    Almoxarifado | Título | Rótulo | Valor | Logo
+                <div style="background: white; padding: 5px; border: 1px dashed #10b981; border-radius: 4px; font-size: 9px; font-family: monospace; white-space: nowrap; overflow-x: auto; color: #059669;">
+                    Local | Título | Rótulo | Valor | Logo
                 </div>
             </div>
-            <textarea id="bulkInput" placeholder="Ex:&#10;FÁBRICA	CÓDIGO	ENDEREÇO	01.01.01&#10;FÁBRICA	CÓDIGO	ENDEREÇO	02.02.02" oninput="parseBulk()"></textarea>
+            <textarea id="bulkInput" placeholder="Ex:&#10;DEPÓSITO	CÓD.	ENDEREÇO	A-01	&#10;DEPÓSITO	CÓD.	ENDEREÇO	A-02" oninput="parseBulk()"></textarea>
             <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px;">
-                <span id="countDisplay">0 etiquetas geradas</span>
+                <span id="countDisplay">0 etiquetas</span>
                 <button onclick="clearBulk()" style="color: #ef4444; background: none; border: none; cursor: pointer;">Limpar</button>
             </div>
         </div>
 
-        <div style="margin-top: 20px;">
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
-                <input type="checkbox" id="showBorder" checked onchange="render()">
-                Mostrar linha de corte (visualização)
-            </label>
-        </div>
-
-        <button class="print-btn" onclick="window.print()">IMPRIMIR AGORA</button>
+        <button class="print-btn" onclick="window.print()">IMPRIMIR FOLHA</button>
     </div>
 
     <!-- ÁREA DE PREVIEW -->
     <div class="preview-area" id="previewArea">
-        <!-- As etiquetas serão injetadas aqui via JavaScript -->
+        
+        <!-- Rascunho Flutuante -->
+        <div id="draftContainer" class="draft-preview-container">
+            <div class="draft-label-title">
+                <span style="display:inline-block; width:8px; height:8px; background:#3b82f6; border-radius:50%;"></span>
+                Rascunho (Editando...)
+            </div>
+            <!-- O Preview do Rascunho será injetado aqui -->
+            <div id="draftTarget"></div>
+        </div>
+
+        <!-- Folha de Papel -->
+        <div class="paper-sheet" id="paperSheet">
+            <div class="paper-label">Folha de Impressão (A4)</div>
+            <!-- As etiquetas confirmadas serão injetadas aqui -->
+            <div id="sheetTarget" style="width: 100%; display: flex; flex-direction: column; align-items: center; gap: 5px;">
+                <div style="color: #cbd5e1; margin-top: 100px; text-align: center; font-size: 14px;">
+                    A folha está vazia.<br>Use o editor acima e clique em "Adicionar".
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
         // ESTADO GLOBAL
         let currentMode = 'single';
-        let bulkData = [];
+        let queueData = []; // Fila Manual
+        let bulkData = [];  // Dados do Excel
 
         // Inicialização
         document.addEventListener('DOMContentLoaded', () => {
             render();
         });
 
-        // Alternar Modos
         function setMode(mode) {
             currentMode = mode;
             document.getElementById('singleMode').classList.toggle('hidden', mode !== 'single');
@@ -465,51 +500,161 @@
             document.getElementById('btnSingle').className = `tab-btn ${mode === 'single' ? 'active' : ''}`;
             document.getElementById('btnBulk').className = `tab-btn bulk ${mode === 'bulk' ? 'active' : ''}`;
             
+            // Limpa visualização ao trocar de modo para evitar confusão
             render();
         }
 
-        // Função de Renderização Principal
-        function render() {
-            const container = document.getElementById('previewArea');
-            const showBorder = document.getElementById('showBorder').checked;
+        function addToQueue() {
+            const newItem = {
+                warehouse: document.getElementById('warehouse').value,
+                headerRight: document.getElementById('headerRight').value,
+                logo: document.getElementById('logoUrl').value,
+                code: document.getElementById('code').value,
+                addressLabel: document.getElementById('addressLabel').value
+            };
             
-            container.innerHTML = '<div class="preview-header">Visualização em Tempo Real</div>';
+            queueData.push(newItem);
+            render();
+            
+            // Feedback no botão
+            const btn = document.querySelector('.btn-add');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = "<span>✓ Adicionado!</span>";
+            btn.style.backgroundColor = "#10b981";
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.style.backgroundColor = "";
+            }, 800);
+        }
 
-            let dataToRender = [];
+        function clearQueue() {
+            if(queueData.length > 0 && confirm('Limpar a folha de impressão?')) {
+                queueData = [];
+                render();
+            }
+        }
 
+        function updatePrintSettings(width, height, printCuts, paperType) {
+            const styleEl = document.getElementById('dynamic-print-style');
+            
+            let printCSS = '';
+            
+            if (paperType === 'a4') {
+                printCSS = `
+                    @media print {
+                        @page { size: A4; margin: 10mm; }
+                        .paper-sheet { width: auto; min-height: auto; padding: 0; margin: 0; }
+                        .label-container { 
+                            width: ${width}mm !important; 
+                            height: ${height}mm !important; 
+                            margin-bottom: 2mm; 
+                            page-break-inside: avoid;
+                        }
+                    }
+                `;
+            } else {
+                printCSS = `
+                    @media print {
+                        @page { size: ${width}mm ${height}mm; margin: 0; }
+                        .paper-sheet { width: auto; padding: 0; margin: 0; }
+                        .label-container { 
+                            width: ${width}mm !important; 
+                            height: ${height}mm !important; 
+                            page-break-after: always; 
+                        }
+                    }
+                `;
+            }
+            
+            styleEl.innerHTML = printCSS;
+            
+            if (printCuts) document.body.classList.add('print-cuts');
+            else document.body.classList.remove('print-cuts');
+        }
+
+        function render() {
+            // Configurações
+            const width = document.getElementById('labelWidth').value || 100;
+            const height = document.getElementById('labelHeight').value || 70;
+            const isBW = document.getElementById('bwMode').checked;
+            const printCuts = document.getElementById('printCuts').checked;
+            const paperType = document.getElementById('paperType').value;
+
+            updatePrintSettings(width, height, printCuts, paperType);
+
+            // 1. Renderiza o RASCUNHO (Sempre visível no modo manual)
+            const draftTarget = document.getElementById('draftTarget');
+            const draftContainer = document.getElementById('draftContainer');
+            
             if (currentMode === 'single') {
-                dataToRender = [{
+                draftContainer.style.display = 'flex';
+                
+                const draftItem = {
                     warehouse: document.getElementById('warehouse').value,
                     headerRight: document.getElementById('headerRight').value,
                     logo: document.getElementById('logoUrl').value,
                     code: document.getElementById('code').value,
                     addressLabel: document.getElementById('addressLabel').value
-                }];
+                };
+                
+                draftTarget.innerHTML = createLabelHTML(draftItem, 'Novo', true, width, height, isBW);
+                
+                // Se a folha tem itens, o rascunho fica transparente/desabilitado visualmente para indicar que não será impresso ainda
+                // Mas mantemos visível para edição
+                if (queueData.length > 0) {
+                    // draftContainer.classList.add('faded'); // Opcional: estilo visual
+                } else {
+                    // draftContainer.classList.remove('faded');
+                }
             } else {
-                dataToRender = bulkData;
+                draftContainer.style.display = 'none';
             }
 
-            if (dataToRender.length === 0 && currentMode === 'bulk') {
-                container.innerHTML += '<div style="color:#94a3b8; margin-top:50px;">Nenhum dado importado. Cole seus dados do Excel.</div>';
-                return;
+            // 2. Renderiza a FOLHA (Queue ou Bulk)
+            const sheetTarget = document.getElementById('sheetTarget');
+            const paperSheet = document.getElementById('paperSheet');
+            
+            // Dados para a folha
+            let dataForSheet = (currentMode === 'single') ? queueData : bulkData;
+            
+            sheetTarget.innerHTML = '';
+            
+            if (dataForSheet.length === 0) {
+                // Se não tem nada na fila
+                if (currentMode === 'single') {
+                    // No modo manual, se a fila ta vazia, mostra mensagem
+                    sheetTarget.innerHTML = `
+                        <div style="color: #94a3b8; margin-top: 80px; text-align: center; font-size: 13px; font-style: italic;">
+                            Configure a etiqueta acima e clique em<br><strong>"Adicionar à Folha"</strong>
+                        </div>`;
+                } else {
+                    sheetTarget.innerHTML = `
+                        <div style="color: #94a3b8; margin-top: 80px; text-align: center; font-size: 13px;">
+                            Cole os dados do Excel para gerar a folha.
+                        </div>`;
+                }
+            } else {
+                dataForSheet.forEach((item, index) => {
+                    const html = createLabelHTML(item, index + 1, true, width, height, isBW);
+                    sheetTarget.insertAdjacentHTML('beforeend', html);
+                });
             }
 
-            dataToRender.forEach((item, index) => {
-                const labelHTML = createLabelHTML(item, index, showBorder);
-                container.insertAdjacentHTML('beforeend', labelHTML);
-            });
+            // Atualiza contadores
+            document.getElementById('queueCount').innerText = queueData.length;
+            document.getElementById('countDisplay').innerText = bulkData.length + ' etiquetas';
+
+            // Renderiza códigos de barras
+            try { JsBarcode(".barcode-svg").init(); } catch (e) {}
         }
 
-        // Parse do Excel
         function parseBulk() {
             const text = document.getElementById('bulkInput').value;
             if (!text.trim()) {
                 bulkData = [];
-                document.getElementById('countDisplay').innerText = '0 etiquetas';
                 render();
                 return;
             }
-
             const lines = text.trim().split('\n');
             bulkData = lines.map(line => {
                 const cols = line.split('\t');
@@ -520,9 +665,7 @@
                     code: cols[3]?.trim() || '',
                     logo: cols[4]?.trim() || ''
                 };
-            }).filter(item => item.code); // Filtra linhas vazias
-
-            document.getElementById('countDisplay').innerText = `${bulkData.length} etiquetas geradas`;
+            }).filter(item => item.code);
             render();
         }
 
@@ -531,48 +674,43 @@
             parseBulk();
         }
 
-        // Gerador do HTML da Etiqueta
-        function createLabelHTML(data, index, showBorder) {
-            // URL da API de código de barras (bwip-js)
-            const cleanCode = data.code.replace(/[^0-9a-zA-Z.]/g, '');
-            const barcodeUrl = `https://bwipjs-api.metafloor.org/?bcid=code128&scale=4&text=${cleanCode}&height=20&alttext=&incltext=false`;
-
-            // HTML do Logo
+        function createLabelHTML(data, index, showBorder, width, height, isBW) {
+            const barcodeValue = data.code.replace(/[^0-9a-zA-Z]/g, '');
+            const bwClass = isBW ? 'bw' : '';
+            
             let logoHTML = '<div style="width:100%; height:100%;"></div>';
             if (data.logo) {
                 logoHTML = `<img src="${data.logo}" alt="Logo" onerror="this.style.display='none'">`;
             }
 
+            // Se index for string (ex: 'Novo'), não mostra número
+            const counterHTML = typeof index === 'number' ? `<div class="counter">${index}</div>` : '';
+
             return `
-            <div class="label-container">
-                ${showBorder ? '<div class="cut-line"></div>' : ''}
-                <div class="counter">${index + 1}</div>
-                
-                <div class="label-grid">
-                    <!-- LINHA 1 -->
+            <div class="label-container" style="width: ${width}mm; height: ${height}mm;">
+                <div class="cut-line"></div>
+                ${counterHTML}
+                <div class="label-grid ${bwClass}">
                     <div class="label-header">
                         <div class="header-left">${data.warehouse}</div>
                         <div class="header-right">${data.headerRight}</div>
                     </div>
-
-                    <!-- LINHA 2 -->
                     <div class="label-body">
-                        <div class="body-left">
-                            ${logoHTML}
-                        </div>
+                        <div class="body-left">${logoHTML}</div>
                         <div class="body-right">
-                            <img src="${barcodeUrl}" class="barcode-img" alt="Barcode">
+                            <svg class="barcode-svg"
+                                jsbarcode-format="CODE128"
+                                jsbarcode-value="${barcodeValue}"
+                                jsbarcode-displayValue="false"
+                                jsbarcode-width="2"
+                                jsbarcode-height="50"
+                                jsbarcode-margin="0">
+                            </svg>
                         </div>
                     </div>
-
-                    <!-- LINHA 3 -->
                     <div class="label-footer">
-                        <div class="footer-left">
-                            <span>${data.addressLabel}</span>
-                        </div>
-                        <div class="footer-right">
-                            <span>${data.code}</span>
-                        </div>
+                        <div class="footer-left"><span>${data.addressLabel}</span></div>
+                        <div class="footer-right"><span>${data.code}</span></div>
                     </div>
                 </div>
             </div>
