@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Etiquetas - Almoxarifado</title>
+    <style>
+        /* --- RESET E BASE --- */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            background-color: #f1f5f9; /* Slate-100 */
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- PAINEL LATERAL (CONTROLES) --- */
+        .sidebar {
+            width: 380px;
+            background: white;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.05);
+            z-index: 10;
+        }
+
+        h2 {
+            color: #1f2937;
+            font-size: 1.25rem;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f1f5f9;
+            padding: 4px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-radius: 6px;
+            color: #94a3b8;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: #dc2626; /* Red-600 */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .tab-btn.active.bulk {
+            color: #16a34a; /* Green-600 */
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            background: #f8fafc;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: bold;
+            color: #64748b;
+            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+        }
+
+        .input-wrapper {
+            margin-bottom: 10px;
+        }
+
+        .input-wrapper:last-child {
+            margin-bottom: 0;
+        }
+
+        .input-label {
+            display: block;
+            font-size: 11px;
+            color: #64748b;
+            margin-bottom: 2px;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            border-color: #dc2626;
+            background: #fef2f2;
+        }
+
+        textarea {
+            height: 150px;
+            font-family: monospace;
+            resize: none;
+            white-space: pre;
+        }
+
+        .print-btn {
+            margin-top: auto;
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(to right, #dc2626, #ef4444);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(220, 38, 38, 0.2);
+            transition: transform 0.1s;
+        }
+
+        .print-btn:active {
+            transform: scale(0.98);
+        }
+
+        .print-btn:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* --- ÁREA DE VISUALIZAÇÃO (PREVIEW) --- */
+        .preview-area {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+        }
+
+        .preview-header {
+            font-size: 12px;
+            font-weight: bold;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* --- O DESIGN DA ETIQUETA (CSS PURO) --- */
+        .label-container {
+            width: 100mm;
+            height: 70mm;
+            background: white;
+            position: relative;
+            /* Sombras para visualização na tela */
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            margin-bottom: 20px;
+            flex-shrink: 0;
+            page-break-after: always; /* Importante para impressão */
+        }
+
+        /* Borda tracejada (linha de corte visual) */
+        .cut-line {
+            position: absolute;
+            inset: 0;
+            border: 1px dashed #cbd5e1;
+            pointer-events: none;
+        }
+
+        /* Grid interno (Borda preta grossa) */
+        .label-grid {
+            position: absolute;
+            top: 4px; left: 4px; right: 4px; bottom: 4px;
+            border: 2px solid black;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            z-index: 1;
+        }
+
+        /* LINHA 1: CABEÇALHO */
+        .label-header {
+            height: 18%; /* Proporção exata */
+            display: flex;
+            border-bottom: 1px solid black;
+        }
+
+        .header-left {
+            width: 40%;
+            background-color: #FF0000;
+            color: white;
+            border-right: 1px solid black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-align: center;
+            padding: 0 4px;
+            line-height: 1.1;
+        }
+
+        .header-right {
+            width: 60%;
+            background-color: #FF0000;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* LINHA 2: CORPO */
+        .label-body {
+            flex: 1; /* Ocupa o espaço restante */
+            display: flex;
+            border-bottom: 1px solid black;
+        }
+
+        .body-left {
+            width: 40%;
+            border-right: 1px solid black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+        }
+
+        .body-left img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .body-right {
+            width: 60%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            overflow: hidden;
+        }
+
+        .barcode-img {
+            width: 100%;
+            height: 100%;
+            object-fit: fill; /* Estica para preencher */
+            max-height: 100%;
+            min-height: 60%;
+        }
+
+        /* LINHA 3: RODAPÉ */
+        .label-footer {
+            height: 25%; /* Proporção exata */
+            display: flex;
+        }
+
+        .footer-left {
+            width: 40%;
+            border-right: 1px solid black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .footer-left span {
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: black;
+        }
+
+        .footer-right {
+            width: 60%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+        }
+
+        .footer-right span {
+            font-size: 30px; /* ~3xl */
+            font-weight: bold;
+            color: black;
+            line-height: 1;
+            letter-spacing: -1px;
+        }
+
+        /* Contador para tela */
+        .counter {
+            position: absolute;
+            left: -40px;
+            top: 0;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        /* --- CONFIGURAÇÕES DE IMPRESSÃO --- */
+        @media print {
+            body {
+                background: white;
+                height: auto;
+                display: block;
+            }
+            .sidebar { display: none; }
+            .preview-area { 
+                padding: 0; 
+                display: block; 
+                overflow: visible;
+            }
+            .preview-header { display: none; }
+            
+            .label-container {
+                box-shadow: none;
+                margin: 0;
+                page-break-after: always;
+                break-after: page;
+            }
+            
+            .cut-line { display: none; } /* Remove linha cinza na impressão */
+            .counter { display: none; }
+        }
+
+        /* Utilitários */
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- PAINEL DE CONTROLE -->
+    <div class="sidebar">
+        <h2>🏷️ Gerador de Etiquetas</h2>
+
+        <div class="tabs">
+            <button class="tab-btn active" id="btnSingle" onclick="setMode('single')">Manual</button>
+            <button class="tab-btn" id="btnBulk" onclick="setMode('bulk')">Importar Excel</button>
+        </div>
+
+        <!-- MODO MANUAL -->
+        <div id="singleMode">
+            <div class="form-group">
+                <label>Cabeçalho (Vermelho)</label>
+                <div class="input-wrapper">
+                    <span class="input-label">Esquerda (Local)</span>
+                    <input type="text" id="warehouse" value="ALMOXARIFADO FÁBRICA" oninput="render()">
+                </div>
+                <div class="input-wrapper">
+                    <span class="input-label">Direita (Título)</span>
+                    <input type="text" id="headerRight" value="CÓDIGO" oninput="render()">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Conteúdo Principal</label>
+                <div class="input-wrapper">
+                    <span class="input-label">Logo URL (Opcional)</span>
+                    <input type="text" id="logoUrl" placeholder="https://..." oninput="render()">
+                </div>
+                <div class="input-wrapper">
+                    <span class="input-label"><strong>VALOR DO CÓDIGO</strong></span>
+                    <input type="text" id="code" value="02.03.03" style="font-weight: bold; font-family: monospace;" oninput="render()">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Rodapé</label>
+                <div class="input-wrapper">
+                    <span class="input-label">Rótulo Inferior</span>
+                    <input type="text" id="addressLabel" value="ENDEREÇO" oninput="render()">
+                </div>
+            </div>
+        </div>
+
+        <!-- MODO EXCEL -->
+        <div id="bulkMode" class="hidden">
+            <div class="form-group" style="background: #eff6ff; border-color: #bfdbfe;">
+                <label style="color: #1e40af;">Instruções</label>
+                <p style="font-size: 11px; color: #1e3a8a; margin-bottom: 5px;">
+                    Copie as colunas do Excel e cole abaixo. Ordem:
+                </p>
+                <div style="background: white; padding: 4px; border: 1px solid #bfdbfe; border-radius: 4px; font-size: 10px; font-family: monospace; overflow-x: auto; white-space: nowrap;">
+                    Almoxarifado | Título | Rótulo | Valor | Logo
+                </div>
+            </div>
+            <textarea id="bulkInput" placeholder="Ex:&#10;FÁBRICA	CÓDIGO	ENDEREÇO	01.01.01&#10;FÁBRICA	CÓDIGO	ENDEREÇO	02.02.02" oninput="parseBulk()"></textarea>
+            <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px;">
+                <span id="countDisplay">0 etiquetas geradas</span>
+                <button onclick="clearBulk()" style="color: #ef4444; background: none; border: none; cursor: pointer;">Limpar</button>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                <input type="checkbox" id="showBorder" checked onchange="render()">
+                Mostrar linha de corte (visualização)
+            </label>
+        </div>
+
+        <button class="print-btn" onclick="window.print()">IMPRIMIR AGORA</button>
+    </div>
+
+    <!-- ÁREA DE PREVIEW -->
+    <div class="preview-area" id="previewArea">
+        <!-- As etiquetas serão injetadas aqui via JavaScript -->
+    </div>
+
+    <script>
+        // ESTADO GLOBAL
+        let currentMode = 'single';
+        let bulkData = [];
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', () => {
+            render();
+        });
+
+        // Alternar Modos
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('singleMode').classList.toggle('hidden', mode !== 'single');
+            document.getElementById('bulkMode').classList.toggle('hidden', mode !== 'bulk');
+            
+            document.getElementById('btnSingle').className = `tab-btn ${mode === 'single' ? 'active' : ''}`;
+            document.getElementById('btnBulk').className = `tab-btn bulk ${mode === 'bulk' ? 'active' : ''}`;
+            
+            render();
+        }
+
+        // Função de Renderização Principal
+        function render() {
+            const container = document.getElementById('previewArea');
+            const showBorder = document.getElementById('showBorder').checked;
+            
+            container.innerHTML = '<div class="preview-header">Visualização em Tempo Real</div>';
+
+            let dataToRender = [];
+
+            if (currentMode === 'single') {
+                dataToRender = [{
+                    warehouse: document.getElementById('warehouse').value,
+                    headerRight: document.getElementById('headerRight').value,
+                    logo: document.getElementById('logoUrl').value,
+                    code: document.getElementById('code').value,
+                    addressLabel: document.getElementById('addressLabel').value
+                }];
+            } else {
+                dataToRender = bulkData;
+            }
+
+            if (dataToRender.length === 0 && currentMode === 'bulk') {
+                container.innerHTML += '<div style="color:#94a3b8; margin-top:50px;">Nenhum dado importado. Cole seus dados do Excel.</div>';
+                return;
+            }
+
+            dataToRender.forEach((item, index) => {
+                const labelHTML = createLabelHTML(item, index, showBorder);
+                container.insertAdjacentHTML('beforeend', labelHTML);
+            });
+        }
+
+        // Parse do Excel
+        function parseBulk() {
+            const text = document.getElementById('bulkInput').value;
+            if (!text.trim()) {
+                bulkData = [];
+                document.getElementById('countDisplay').innerText = '0 etiquetas';
+                render();
+                return;
+            }
+
+            const lines = text.trim().split('\n');
+            bulkData = lines.map(line => {
+                const cols = line.split('\t');
+                return {
+                    warehouse: cols[0]?.trim() || '',
+                    headerRight: cols[1]?.trim() || 'CÓDIGO',
+                    addressLabel: cols[2]?.trim() || 'ENDEREÇO',
+                    code: cols[3]?.trim() || '',
+                    logo: cols[4]?.trim() || ''
+                };
+            }).filter(item => item.code); // Filtra linhas vazias
+
+            document.getElementById('countDisplay').innerText = `${bulkData.length} etiquetas geradas`;
+            render();
+        }
+
+        function clearBulk() {
+            document.getElementById('bulkInput').value = '';
+            parseBulk();
+        }
+
+        // Gerador do HTML da Etiqueta
+        function createLabelHTML(data, index, showBorder) {
+            // URL da API de código de barras (bwip-js)
+            const cleanCode = data.code.replace(/[^0-9a-zA-Z.]/g, '');
+            const barcodeUrl = `https://bwipjs-api.metafloor.org/?bcid=code128&scale=4&text=${cleanCode}&height=20&alttext=&incltext=false`;
+
+            // HTML do Logo
+            let logoHTML = '<div style="width:100%; height:100%;"></div>';
+            if (data.logo) {
+                logoHTML = `<img src="${data.logo}" alt="Logo" onerror="this.style.display='none'">`;
+            }
+
+            return `
+            <div class="label-container">
+                ${showBorder ? '<div class="cut-line"></div>' : ''}
+                <div class="counter">${index + 1}</div>
+                
+                <div class="label-grid">
+                    <!-- LINHA 1 -->
+                    <div class="label-header">
+                        <div class="header-left">${data.warehouse}</div>
+                        <div class="header-right">${data.headerRight}</div>
+                    </div>
+
+                    <!-- LINHA 2 -->
+                    <div class="label-body">
+                        <div class="body-left">
+                            ${logoHTML}
+                        </div>
+                        <div class="body-right">
+                            <img src="${barcodeUrl}" class="barcode-img" alt="Barcode">
+                        </div>
+                    </div>
+
+                    <!-- LINHA 3 -->
+                    <div class="label-footer">
+                        <div class="footer-left">
+                            <span>${data.addressLabel}</span>
+                        </div>
+                        <div class="footer-right">
+                            <span>${data.code}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+    </script>
+</body>
+</html>
