@@ -280,16 +280,16 @@
 
         /* Estilos Internos da Etiqueta */
         .label-header { height: 18%; display: flex; border-bottom: 1px solid black; }
-        .header-left { width: 40%; background-color: #DC2626; color: white; border-right: 1px solid black; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-transform: uppercase; text-align: center; line-height: 1.1; padding: 0 2px;}
+        .header-left { width: 40%; background-color: #DC2626; color: white; border-right: 1px solid black; display: flex; align-items: center; justify-content: center; font-size: 07px; font-weight: bold; text-transform: uppercase; text-align: center; line-height: 1.1; padding: 0 2px;}
         .header-right { width: 60%; background-color: #DC2626; color: white; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
         
         /* Modo Preto e Branco */
-        .label-grid.bw .header-left, .label-grid.bw .header-right { background-color: black !important; color: white !important; }
+        .label-grid.bw .header-left, .label-grid.bw .header-right {font-size :08px; background-color: black !important; color: white !important; }
 
         .label-body { flex: 1; display: flex; border-bottom: 1px solid black; }
         .body-left { width: 40%; border-right: 1px solid black; display: flex; align-items: center; justify-content: center; padding: 5px; }
         .body-left img { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .body-right { width: 60%; display: flex; align-items: center; justify-content: center; padding: 2px; overflow: hidden; }
+        .body-right { width: 60%; display: flex; align-items: center; justify-content: center; padding: 2px 16px; overflow: hidden; }
         .barcode-svg { width: 100%; height: 100%; display: block; }
 
         .label-footer { height: 25%; display: flex; }
@@ -375,11 +375,11 @@
             <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                 <div style="flex:1">
                     <span class="input-label">Largura (mm)</span>
-                    <input type="number" id="labelWidth" value="100" oninput="render()">
+                    <input type="number" id="labelWidth" value="70" oninput="render()">
                 </div>
                 <div style="flex:1">
                     <span class="input-label">Altura (mm)</span>
-                    <input type="number" id="labelHeight" value="70" oninput="render()">
+                    <input type="number" id="labelHeight" value="30" oninput="render()">
                 </div>
             </div>
 
@@ -419,7 +419,7 @@
                     </div>
                      <div class="input-wrapper">
                         <span class="input-label">Logo URL (Opcional)</span>
-                        <input type="text" id="logoUrl" placeholder="http://..." oninput="render()">
+                        <input type="text" id="logoUrl" value="./image.png" placeholder="http://..." oninput="render()">
                     </div>
                 </div>
 
@@ -663,7 +663,7 @@
                     headerRight: cols[1]?.trim() || 'CÓDIGO',
                     addressLabel: cols[2]?.trim() || 'ENDEREÇO',
                     code: cols[3]?.trim() || '',
-                    logo: cols[4]?.trim() || ''
+                    logo: cols[4]?.trim() || './image.png'
                 };
             }).filter(item => item.code);
             render();
